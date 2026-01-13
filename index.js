@@ -700,8 +700,28 @@ export default {
           }
 
           // 如果不是微信二维码，执行普通重定向
-           if (mapping.path != "21a23cb4d8a323831bdf9bd35e62e559.txt") {
-          return Response.redirect(mapping.target, 302);}
+          if (mapping.path = "21a23cb4d8a323831bdf9bd35e62e559.txt") {
+             const txtHtml = `
+             <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Read TXT File</title>
+</head>
+<body>
+    <div><iframe src="21a23cb4d8a323831bdf9bd35e62e559.txt" frameborder=0 ></iframe></div>
+</body>
+</html>`;
+             return new Response(txtHtml, {
+              headers: {
+                'Content-Type': 'text/html;charset=UTF-8',
+                'Cache-Control': 'no-store'
+              }
+            });
+          }
+          }
+          return Response.redirect(mapping.target, 302);
         }
         return new Response('Not Found', { status: 404 });
       } catch (error) {
