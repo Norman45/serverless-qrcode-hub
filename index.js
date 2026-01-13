@@ -719,7 +719,7 @@ export default {
                 'Cache-Control': 'no-store'
               }
             });
-          }
+          
           }
           return Response.redirect(mapping.target, 302);
         }
