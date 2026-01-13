@@ -710,7 +710,7 @@ export default {
     <title>Read TXT File</title>
 </head>
 <body>
-    <div><iframe src="21a23cb4d8a323831bdf9bd35e62e559.txt" frameborder=0 ></iframe></div>
+    <div><iframe src="./21a23cb4d8a323831bdf9bd35e62e559.txt" frameborder=0 ></iframe></div>
 </body>
 </html>`;
              return new Response(txtHtml, {
