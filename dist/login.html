@@ -136,7 +136,7 @@
                         class="input input-bordered w-full text-base md:text-lg h-11 md:h-12"
                         autocomplete="current-password">
                     <div class="flex flex-col gap-2 mt-6">
-                        <button onclick="login()" class="btn btn-primary h-11 md:h-12 text-base md:text-lg w-full">
+                        <button onclick="login()" id="li" class="btn btn-primary h-11 md:h-12 text-base md:text-lg w-full">
                             登 录
                         </button>
                     </div>
@@ -161,6 +161,7 @@
             const password = document.getElementById('password').value;
             const error = document.getElementById('error');
             const button = document.querySelector('button');
+            const button2 = document.getElementById('li');
 
             button.disabled = true;
             button.innerHTML = `
@@ -194,8 +195,8 @@
                     limit = limit + 1;
                     if (limit > 5) {
                         alert("密码输错次数超过5次，禁止登录");
-                        button.textContent = '禁 止 登 录';
-                        button.disable = true;;
+                        button2.textContent = '禁 止 登 录';
+                        button2.disable = true;;
                     }
                 }
             } catch (e) {
