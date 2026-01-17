@@ -192,6 +192,7 @@
                     button.disabled = false;
                     button.textContent = '登 录';
                     limit = limit + 1
+                    console.log(limit);
                     if (limit > 5) {
                         alert("密码输错次数超过5次，禁止登录");
                         button.textContent = '禁 止 登 录';
