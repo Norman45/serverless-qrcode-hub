@@ -160,6 +160,7 @@
             const password = document.getElementById('password').value;
             const error = document.getElementById('error');
             const button = document.querySelector('button');
+            let limit = 0;
 
             button.disabled = true;
             button.innerHTML = `
@@ -190,6 +191,12 @@
                     error.style.display = 'flex';
                     button.disabled = false;
                     button.textContent = '登 录';
+                    limit = limit + 1
+                    if (limit > 5) {
+                        alert("密码输错次数超过5次，禁止登录");
+                        button.textContent = '禁 止 登 录';
+                        button.disable = true;;
+                    }
                 }
             } catch (e) {
                 error.querySelector('span').textContent = '网络错误，请稍后重试';
