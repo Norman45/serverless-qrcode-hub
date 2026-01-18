@@ -366,7 +366,7 @@ export default {
 
     // 根目录跳转到 管理后台
     if (path === '') {
-      return Response.redirect(url.origin + '/admin.html', 302);
+      return Response.redirect(url.origin + '/login.html', 302);
     }
 
     // API 路由处理
