@@ -364,9 +364,13 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.slice(1);
 
-    // 根目录跳转到 管理后台
+    // 根目录有cookie跳转到管理后台，没有跳转到登录页面
     if (path === '') {
-      return Response.redirect(url.origin + '/login.html', 302);
+      if (!verifyAuthCookie(request, env)){
+        return Response.redirect(url.origin + '/login.html', 302);
+      } else {
+        return Response.redirect(url.origin + '/admin.html', 302);
+      }
     }
 
     // API 路由处理
