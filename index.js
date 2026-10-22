@@ -10,6 +10,21 @@ const banPath = [
   'favicon.svg',
 ];
 
+// 解析多链接：支持数组 / JSON 数组字符串 / 换行或逗号分隔字符串
+function parseTargets(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(t => String(t).trim()).filter(Boolean);
+  }
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      return arr.map(t => String(t).trim()).filter(Boolean);
+    }
+  } catch (e) { /* 非 JSON，继续往下解析 */ }
+  return String(raw).split(/[\r\n,]+/).map(t => t.trim()).filter(Boolean);
+}
+
 // 数据库初始化
 async function initDatabase() {
   // 创建表
@@ -41,6 +56,22 @@ async function initDatabase() {
     await DB.prepare(`
       ALTER TABLE mappings 
       ADD COLUMN qrCodeData TEXT
+    `).run();
+  }
+
+  // 添加 targets 列（多链接轮询：JSON 数组）
+  if (!columns.includes('targets')) {
+    await DB.prepare(`
+      ALTER TABLE mappings 
+      ADD COLUMN targets TEXT
+    `).run();
+  }
+
+  // 添加 idx 列（轮询游标）
+  if (!columns.includes('idx')) {
+    await DB.prepare(`
+      ALTER TABLE mappings 
+      ADD COLUMN idx INTEGER DEFAULT 0
     `).run();
   }
 
@@ -115,6 +146,8 @@ async function listMappings(page = 1, pageSize = 10) {
   for (const row of results.results) {
     mappings[row.path] = {
       target: row.target,
+      targets: parseTargets(row.targets || row.target),
+      idx: row.idx || 0,
       name: row.name,
       expiry: row.expiry,
       enabled: row.enabled === 1,
@@ -132,8 +165,14 @@ async function listMappings(page = 1, pageSize = 10) {
   };
 }
 
+// target 参数：单链接或多链接（数组 / 多行字符串），统一转为多链接数组存储
 async function createMapping(path, target, name, expiry, enabled = true, isWechat = false, qrCodeData = null) {
-  if (!path || !target || typeof path !== 'string' || typeof target !== 'string') {
+  if (!path || typeof path !== 'string') {
+    throw new Error('Invalid input');
+  }
+
+  const targets = parseTargets(target);
+  if (targets.length === 0) {
     throw new Error('Invalid input');
   }
 
@@ -152,11 +191,12 @@ async function createMapping(path, target, name, expiry, enabled = true, isWecha
   }
 
   await DB.prepare(`
-    INSERT INTO mappings (path, target, name, expiry, enabled, isWechat, qrCodeData)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO mappings (path, target, targets, idx, name, expiry, enabled, isWechat, qrCodeData)
+    VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?)
   `).bind(
     path,
-    target,
+    targets[0],
+    JSON.stringify(targets),
     name || null,
     expiry || null,
     enabled ? 1 : 0,
@@ -179,7 +219,7 @@ async function deleteMapping(path) {
 }
 
 async function updateMapping(originalPath, newPath, target, name, expiry, enabled = true, isWechat = false, qrCodeData = null) {
-  if (!originalPath || !newPath || !target) {
+  if (!originalPath || !newPath) {
     throw new Error('Invalid input');
   }
 
@@ -190,6 +230,20 @@ async function updateMapping(originalPath, newPath, target, name, expiry, enable
 
   if (expiry && isNaN(Date.parse(expiry))) {
     throw new Error('Invalid expiry date');
+  }
+
+  // 如果没有提供新的目标，保留原有的 targets
+  let targets;
+  if (target) {
+    targets = parseTargets(target);
+    if (targets.length === 0) throw new Error('Invalid input');
+  } else {
+    const existingMapping = await DB.prepare(`
+      SELECT targets, target
+      FROM mappings
+      WHERE path = ?
+    `).bind(originalPath).first();
+    targets = parseTargets(existingMapping && (existingMapping.targets || existingMapping.target));
   }
 
   // 如果没有提供新的二维码数据，获取原有的二维码数据
@@ -212,13 +266,14 @@ async function updateMapping(originalPath, newPath, target, name, expiry, enable
 
   const stmt = DB.prepare(`
     UPDATE mappings 
-    SET path = ?, target = ?, name = ?, expiry = ?, enabled = ?, isWechat = ?, qrCodeData = ?
+    SET path = ?, target = ?, targets = ?, idx = 0, name = ?, expiry = ?, enabled = ?, isWechat = ?, qrCodeData = ?
     WHERE path = ?
   `);
 
   await stmt.bind(
     newPath,
-    target,
+    targets[0],
+    JSON.stringify(targets),
     name || null,
     expiry || null,
     enabled ? 1 : 0,
@@ -249,7 +304,7 @@ async function getExpiringMappings() {
   const results = await DB.prepare(`
     WITH categorized_mappings AS (
       SELECT 
-        path, name, target, expiry, enabled, isWechat, qrCodeData,
+        path, name, target, targets, idx, expiry, enabled, isWechat, qrCodeData,
         CASE 
           WHEN datetime(expiry) < datetime(?) THEN 'expired'
           WHEN datetime(expiry) <= datetime(?) THEN 'expiring'
@@ -273,6 +328,8 @@ async function getExpiringMappings() {
       path: row.path,
       name: row.name,
       target: row.target,
+      targets: parseTargets(row.targets || row.target),
+      idx: row.idx || 0,
       expiry: row.expiry,
       enabled: row.enabled === 1,
       isWechat: row.isWechat === 1,
@@ -433,7 +490,7 @@ export default {
             }
 
             const mapping = await DB.prepare(`
-              SELECT path, target, name, expiry, enabled, isWechat, qrCodeData
+              SELECT path, target, targets, idx, name, expiry, enabled, isWechat, qrCodeData
               FROM mappings
               WHERE path = ?
             `).bind(mappingPath).first();
@@ -444,7 +501,11 @@ export default {
               });
             }
 
-            return new Response(JSON.stringify(mapping), {
+            return new Response(JSON.stringify({
+              ...mapping,
+              targets: parseTargets(mapping.targets || mapping.target),
+              idx: mapping.idx || 0
+            }), {
               headers: { 'Content-Type': 'application/json' }
             });
           }
@@ -502,7 +563,7 @@ export default {
     if (path) {
       try {
         const mapping = await DB.prepare(`
-          SELECT path, target, name, expiry, enabled, isWechat, qrCodeData
+          SELECT path, target, targets, idx, name, expiry, enabled, isWechat, qrCodeData
           FROM mappings
           WHERE path = ?
         `).bind(path).first();
@@ -703,8 +764,23 @@ export default {
             });
           }
 
-          // 如果不是微信二维码，执行普通重定向
-          return Response.redirect(mapping.target, 302);
+          // ============ 多链接轮询跳转（改造核心） ============
+          const targets = parseTargets(mapping.targets || mapping.target);
+          if (targets.length === 0) {
+            return new Response('Not Found', { status: 404 });
+          }
+
+          // 取当前游标对应的目标，并轮询到下一个
+          let index = Number(mapping.idx ?? 0);
+          if (index < 0 || index >= targets.length) index = 0;
+          const target = targets[index];
+          const nextIndex = (index + 1) % targets.length;
+
+          await DB.prepare('UPDATE mappings SET idx = ? WHERE path = ?')
+            .bind(nextIndex, path)
+            .run();
+
+          return Response.redirect(target, 302);
         }
         return new Response('Not Found', { status: 404 });
       } catch (error) {
