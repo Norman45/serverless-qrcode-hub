@@ -366,7 +366,7 @@ async function updateMapping(originalPath, newPath, target, name, expiry, enable
       FROM mappings
       WHERE path = ?
     `).bind(originalPath).first();
-        targets = parseTargets(existingMapping && (existingMapping.targets || existingMapping.target));
+    targets = parseTargets(existingMapping && (existingMapping.targets || existingMapping.target));
   }
 
   // 如果没有提供新的二维码数据，获取原有的二维码数据
@@ -950,4 +950,3 @@ export default {
   },
 
 };
- 
